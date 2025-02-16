@@ -12,7 +12,7 @@ else
 		LDFLAGS = -lm -sASYNCIFY=1 -sSTACK_SIZE=524288
 		TARGET_EXT = .html
 	else ifeq ($(UNAME_S),Darwin)
-		LDFLAGS = -framework Cocoa -framework AudioToolbox
+		LDFLAGS = -framework Cocoa
 	else
 		LDFLAGS = -lX11 -lasound -lm
 		TARGET_EXT =

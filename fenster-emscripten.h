@@ -12,10 +12,10 @@ struct fenster {      // byte   32bit
   const int height;   // 8      2
   uint32_t *buf;      // 12     3
   int keys[256];      // 16     4
-  int mod;            // 1040   257
-  int x;              // 1044   258
-  int y;              // 1048   259
-  int mouse;          // 1052   260
+  int mod;            // 1040   260
+  int x;              // 1044   261
+  int y;              // 1048   262
+  int mouse;          // 1052   263
 };
 
 #define fenster_pixel(f, x, y) ((f)->buf[((y) * (f)->width) + (x)])
@@ -42,16 +42,16 @@ EM_JS(int, fenster_open, (struct fenster *f), {
   // TODO: handle mod
 
   Module.canvas.addEventListener('mousemove', e => {
-    Module.HEAP32[p32 + 258] = e.offsetX;
-    Module.HEAP32[p32 + 259] = e.offsetY;
+    Module.HEAP32[p32 + 261] = e.offsetX;
+    Module.HEAP32[p32 + 262] = e.offsetY;
   });
 
   Module.canvas.addEventListener('mousedown', e => {
-    Module.HEAP32[p32 + 260] = e.which;
+    Module.HEAP32[p32 + 263] = e.which;
   });
 
   Module.canvas.addEventListener('mouseup', e => {
-    Module.HEAP32[p32 + 260] = 0;
+    Module.HEAP32[p32 + 263] = 0;
   });
 
   Module.canvas.addEventListener('keydown', e => {
