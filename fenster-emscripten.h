@@ -31,6 +31,7 @@ EM_JS(int, fenster_open, (struct fenster *f), {
       document.appendElement(Module.canvas);
     }
   }
+  // the HEAP32 offset of fenster object
   const p32 = f/4;
   const width = Module.HEAP32[p32 + 1];
   const height = Module.HEAP32[p32 + 2];
@@ -38,8 +39,6 @@ EM_JS(int, fenster_open, (struct fenster *f), {
   Module.canvas.height = height;
   Module.ctx = canvas.getContext("2d");
   Module.screen = Module.ctx.getImageData(0, 0, width, height);
-
-  // TODO: handle mod
 
   Module.canvas.addEventListener('mousemove', e => {
     Module.HEAP32[p32 + 261] = e.offsetX;
@@ -56,16 +55,47 @@ EM_JS(int, fenster_open, (struct fenster *f), {
 
   Module.canvas.addEventListener('keydown', e => {
     Module.HEAP32[p32 + 4 + e.keyCode] = 1;
+
+    let mod = 0;
+    if (e.ctrlKey) {
+      mod+=1
+    }
+    if (e.shiftKey) {
+      mod+=2
+    }
+    if (e.altKey) {
+      mod+=4
+    }
+    if (e.metaKey) {
+      mod+=8
+    }
+    Module.HEAP32[p32 + 260] = mod;
   });
 
   Module.canvas.addEventListener('keyup', e => {
     Module.HEAP32[p32 + 4 + e.keyCode] = 0;
+
+    // TODO: not sure if I need to do this twice
+    let mod = 0;
+    if (e.ctrlKey) {
+      mod+=1
+    }
+    if (e.shiftKey) {
+      mod+=2
+    }
+    if (e.altKey) {
+      mod+=4
+    }
+    if (e.metaKey) {
+      mod+=8
+    }
+    Module.HEAP32[p32 + 260] = mod;
   });
 });
 
 EM_JS(void, emscripten_fenster_loop, (int width, int height, uint32_t* buf), {
   const byteSize = width * height * 4;
-  const buffer = Module.HEAPU8.subarray(buf, buf + byteSize);
+  const buffer = Module.HEAPU8.slice(buf, buf + byteSize);
   // set alpha to 100% and re-arrange RGBA
   let r,g,b = 0;
   for (let i=0;i<byteSize;i+=4) {
