@@ -1,23 +1,25 @@
 // this is an emscripten-only implementation of fenster
+// make sure to add -sASYNCIFY
 
 #include <stdint.h>
 #include <stdlib.h>
 #include "emscripten.h"
 
-struct fenster {
-  const int width;
-  const int height;
-  uint32_t *buf;
-  uint8_t keys[256]; /* keys are mostly ASCII, but arrows are 17..20 */
-  int mod;       /* mod is 4 bits mask, ctrl=1, shift=2, alt=4, meta=8 */
-  int x;
-  int y;
-  int mouse;
-  const char *title; // I put it at the end, so everything else is fixed-length
+//                        offsets
+struct fenster {      // byte   32bit
+  const char *title;  // 0      0
+  const int width;    // 4      1
+  const int height;   // 8      2
+  uint32_t *buf;      // 12     3
+  int keys[256];      // 16     4
+  int mod;            // 1040   257
+  int x;              // 1044   258
+  int y;              // 1048   259
+  int mouse;          // 1052   260
 };
 
-// gives mem out-of-bounds error in emscripten, for some reason
 #define fenster_pixel(f, x, y) ((f)->buf[((y) * (f)->width) + (x)])
+#define fenster_sleep emscripten_sleep
 
 static bool running = true;
 
@@ -29,8 +31,9 @@ EM_JS(int, fenster_open, (struct fenster *f), {
       document.appendElement(Module.canvas);
     }
   }
-  const width = Module.HEAP32[f/4];
-  const height = Module.HEAP32[(f/4) + 1];
+  const p32 = f/4;
+  const width = Module.HEAP32[p32 + 1];
+  const height = Module.HEAP32[p32 + 2];
   Module.canvas.width = width;
   Module.canvas.height = height;
   Module.ctx = canvas.getContext("2d");
@@ -39,44 +42,53 @@ EM_JS(int, fenster_open, (struct fenster *f), {
   // TODO: handle mod
 
   Module.canvas.addEventListener('mousemove', e => {
-    Module.HEAP32[(f/4) + 5] = e.offsetX;
-    Module.HEAP32[(f/4) + 6] = e.offsetX;
+    Module.HEAP32[p32 + 258] = e.offsetX;
+    Module.HEAP32[p32 + 259] = e.offsetY;
   });
 
   Module.canvas.addEventListener('mousedown', e => {
-    Module.HEAP32[(f/4) + 7] = e.which;
+    Module.HEAP32[p32 + 260] = e.which;
   });
 
   Module.canvas.addEventListener('mouseup', e => {
-    Module.HEAP32[(f/4) + 7] = 0;
+    Module.HEAP32[p32 + 260] = 0;
   });
 
   Module.canvas.addEventListener('keydown', e => {
-    Module.HEAP32[ Module.HEAP32[(f/4) + 3] + e.keyCode] = 1;
+    Module.HEAP32[p32 + 4 + e.keyCode] = 1;
   });
 
   Module.canvas.addEventListener('keyup', e => {
-    Module.HEAP32[ Module.HEAP32[(f/4) + 3] + e.keyCode] = 0;
+    Module.HEAP32[p32 + 4 + e.keyCode] = 0;
   });
 });
 
-EM_JS(void, emscripten_fenster_loop, (struct fenster *f), {
-  // set alpha to 100%
-  const pmax = f + 8 + Module.canvas.width * Module.canvas.height * 4;
-  for (let p=f+8;p < pmax;p+=4) {
-    Module.HEAPU8[p+3] = 0xFF;
+EM_JS(void, emscripten_fenster_loop, (int width, int height, uint32_t* buf), {
+  const byteSize = width * height * 4;
+  const buffer = Module.HEAPU8.subarray(buf, buf + byteSize);
+  // set alpha to 100% and re-arrange RGBA
+  let r,g,b = 0;
+  for (let i=0;i<byteSize;i+=4) {
+    r = buffer[i+2];
+    g = buffer[i+1];
+    b = buffer[i+0];
+    buffer[i+0] = r;
+    buffer[i+1] = g;
+    buffer[i+2] = b;
+    buffer[i+3] = 0xff;
   }
-  const bufSize = Module.canvas.width*Module.canvas.height*4;
-  Module.screen.data.set(Module.HEAPU8.slice(f+8, f+8+bufSize));
+  Module.screen.data.set(buffer);
   Module.ctx.putImageData(Module.screen, 0, 0);
 });
 
 int fenster_loop(struct fenster *f) {
   if (running) {
-    emscripten_fenster_loop(f);
+    emscripten_fenster_loop(f->width, f->height, f->buf);
   }
 
   // this is hack to make it not pin the main-loop (~60fps)
+  // better would be if we can wrap the loop with emscripten_set_main_loop
+  // which also does not require ASYNCIFY
   emscripten_sleep(16);
 
   return running ? 0 : 1;
@@ -84,10 +96,6 @@ int fenster_loop(struct fenster *f) {
 
 void fenster_close(struct fenster *f) {
   running = false;
-}
-
-void fenster_sleep(int64_t ms) {
-  emscripten_sleep(ms);
 }
 
 EM_JS(int64_t, fenster_time, (void), {
